@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>當值管理系統 - 導覽首頁</title>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --secondary: #34a853;
+            --bg: #f8f9fa;
+        }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; padding: 20px; background: white; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h1 { color: var(--primary); margin: 0; }
+        
+        .section-title { font-size: 20px; font-weight: bold; margin: 30px 0 15px; padding-left: 10px; border-left: 5px solid var(--primary); }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        
+        .card {
+            background: white; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-decoration: none; color: #333;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.15); border: 1px solid var(--primary); }
+        
+        .icon { font-size: 40px; margin-bottom: 15px; }
+        .card h3 { margin: 10px 0; color: #1a73e8; }
+        .card p { font-size: 14px; color: #666; margin: 0; }
+
+        /* 區分顏色 */
+        .report-card { border-top: 5px solid var(--secondary); }
+        .admin-card { border-top: 5px solid var(--primary); }
+        
+        .badge { background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-top: 8px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🏫 學校當值管理系統</h1>
+    <p>請選擇需要執行的功能</p>
+</div>
+
+<div class="section-title">📊 統計報告與列印 (Reports)</div>
+<div class="grid">
+    <a href="print_Attendancep.html" class="card report-card">
+        <div class="icon">👤</div>
+        <h3>個人出勤統計</h3>
+        <p>按人名查詢特定時段的出勤率與明細</p>
+        <div class="badge">個人版 (P)</div>
+    </a>
+    <a href="print_Attendance.html" class="card report-card">
+        <div class="icon">📅</div>
+        <h3>每日出勤總表</h3>
+        <p>查看特定日期的完整點名紀錄</p>
+    </a>
+    <a href="print_dutyp.html" class="card report-card">
+        <div class="icon">📋</div>
+        <h3>個人當值表</h3>
+        <p>為每位同事生成專屬的週循環時間表</p>
+        <div class="badge">個人版 (P)</div>
+    </a>
+    <a href="print_duty.html" class="card report-card">
+        <div class="icon">🏫</div>
+        <h3>全校當值總表</h3>
+        <p>列印週循環排班定案總表</p>
+    </a>
+</div>
+
+<div class="section-title">⚙️ 系統設定與管理 (Management)</div>
+<div class="grid">
+    <a href="Take_Attendance.html" class="card admin-card">
+        <div class="icon">📝</div>
+        <h3>即時點名系統</h3>
+        <p>每日當值人員出席/缺席記錄</p>
+    </a>
+    <a href="Edit_Attendance.html" class="card admin-card">
+        <div class="icon">✏️</div>
+        <h3>修正出勤紀錄</h3>
+        <p>修改已存檔的出勤狀態</p>
+    </a>
+    <a href="Setup_Duty.html" class="card admin-card">
+        <div class="icon">📅</div>
+        <h3>週循環排班</h3>
+        <p>設定週一至週五的崗位人員分配</p>
+    </a>
+    <a href="Define_Candidate.html" class="card admin-card">
+        <div class="icon">👥</div>
+        <h3>定義崗位候選人</h3>
+        <p>管理各個時段及崗位的可用人員清單列表</p>
+    </a>
+</div>
+
+</body>
+</html>
