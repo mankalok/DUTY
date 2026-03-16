@@ -22,14 +22,12 @@
         th, td { border: 1px solid #dadce0; padding: 8px 4px; text-align: center; vertical-align: middle; }
         th { background: #f1f3f4; font-size: 16px; position: sticky; top: 0; z-index: 100; }
         
-        /* ✨ 左側時段：橫向全格背景著色 */
         .bg-slot-1 { background-color: #e3f2fd !important; } 
         .bg-slot-2 { background-color: #e8f5e9 !important; } 
         .bg-slot-3 { background-color: #fff3e0 !important; } 
         .bg-slot-4 { background-color: #f3e5f5 !important; } 
         .bg-slot-5 { background-color: #f1f8e9 !important; } 
 
-        /* 📊 直行間隔色：針對星期二 (Tue) 同 星期四 (Thu) 嘅格仔 */
         .col-stripe { background-color: #ffe0b2; } 
 
         .slot-text { font-size: 12px; color: #555; font-weight: normal; }
@@ -44,7 +42,9 @@
         .btn-apply { background: #e74c3c; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
         select { width: 95%; padding: 8px; border-radius: 6px; border: 1px solid #aaa; font-size: 18px; font-weight: bold; background: white; }
 
-        .count-section { margin-top: 30px; background: #fff9e6; padding: 15px; border-radius: 10px; border: 2px solid #ffe082; }
+        /* 計數區強化 */
+        .count-section { margin-top: 30px; background: #fff9e6; padding: 20px; border-radius: 10px; border: 2px solid #ffe082; }
+        .count-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #ffe082; padding-bottom: 10px; }
         .count-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
         .count-item { background: white; border: 1px solid #ddd; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
         .count-num { font-weight: 900; color: white; background: #d93025; padding: 10px 18px; border-radius: 12px; font-size: 36px; }
@@ -53,12 +53,16 @@
         
         #loading { text-align: center; padding: 80px; font-size: 24px; color: #1a73e8; }
         .error-box { color: #d93025; background: #fce8e6; padding: 20px; border-radius: 8px; border: 1px solid #f5c2c7; margin: 20px; text-align: center; }
+        
+        /* 返回首頁掣樣式 */
+        .back-home { text-align: center; margin-top: 50px; padding: 20px; clear: both; }
+        .btn-home { padding: 10px 30px; background: #607d8b; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="loading">⏳ 正在同步數據，請稍候...</div>
+    <div id="loading">⏳ 正在同步數據並生成選單，請稍候...</div>
     <div id="errorArea" style="display:none;" class="error-box"></div>
 
     <div id="mainContent" style="display:none;">
@@ -82,11 +86,23 @@
         </table>
 
         <div class="count-section">
-            <h3>📊 當值計數 (Counting)</h3>
+            <div class="count-header">
+                <h3 style="margin:0;">📊 當值計數 (Counting)</h3>
+                <div>
+                    <label style="font-weight: bold;">🔍 篩選人員：</label>
+                    <select id="staffFilter" onchange="updateCounts()" style="width: auto; padding: 5px 15px; font-size: 16px; border-color: var(--primary);">
+                        <option value="ALL">-- 顯示全部 --</option>
+                    </select>
+                </div>
+            </div>
             <div id="countDisplay" class="count-grid"></div>
         </div>
 
         <button type="button" class="btn-save" onclick="saveTemplate()">💾 儲存並覆蓋排班表</button>
+
+        <div class="back-home">
+            <a href="index.html" class="btn-home">🏠 返回導覽首頁</a>
+        </div>
     </div>
 </div>
 
@@ -109,6 +125,15 @@
                 fetchData('getStructure'), fetchData('getCandidateMap'),
                 fetchData('getStaffList'), fetchData('getDutyTemplate')
             ]);
+
+            // 填充篩選選單
+            const filterSel = document.getElementById('staffFilter');
+            staffList.sort().forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = n;
+                filterSel.appendChild(opt);
+            });
+
             renderTable();
             updateCounts();
             document.getElementById('loading').style.display = 'none';
@@ -145,7 +170,7 @@
             const savedRow = Array.isArray(currentTemplate) ? currentTemplate.find(r => r[0] == p.slot && r[1] == p.post) : null;
 
             for (let i = 0; i < 5; i++) {
-                const isStripe = (i === 1 || i === 3) ? "col-stripe" : ""; // 星期二(1)同四(3)加色
+                const isStripe = (i === 1 || i === 3) ? "col-stripe" : ""; 
                 const savedName = savedRow ? (savedRow[i + 2] || "--") : "--";
                 const cellId = `sel_${btoa(unescape(encodeURIComponent(p.slot + p.post + daysEng[i]))).replace(/=/g, '')}`;
                 
@@ -167,35 +192,6 @@
             return rowHtml + `</tr>`;
         }).join('');
         refreshAllDropdowns();
-    }
-
-    function applyAllTemplates() {
-        const selects = document.querySelectorAll('.duty-select');
-        let successCount = 0;
-        selects.forEach(sel => {
-            const container = sel.closest('.cell-box');
-            const savedName = container.querySelector('.saved-name-big').getAttribute('data-saved-name');
-            if (savedName && savedName !== "--") {
-                const options = Array.from(sel.options).map(o => o.value);
-                if (options.includes(savedName)) {
-                    sel.value = savedName;
-                    successCount++;
-                }
-            }
-        });
-        handleSelectChange();
-        alert(`完成！已填入 ${successCount} 個崗位。`);
-    }
-
-    function applyName(e, id, name) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        const sel = document.getElementById(id);
-        if (Array.from(sel.options).some(o => o.value === name)) {
-            sel.value = name;
-            handleSelectChange();
-        } else {
-            alert(`人員衝突或不在名單內。`);
-        }
     }
 
     function refreshAllDropdowns() {
@@ -230,12 +226,52 @@
     }
 
     function updateCounts() {
+        const filterVal = document.getElementById('staffFilter').value;
         const counts = {};
         staffList.forEach(n => counts[n] = 0);
-        document.querySelectorAll('.duty-select').forEach(s => { if (s.value) counts[s.value]++; });
-        document.getElementById('countDisplay').innerHTML = staffList.map(n => `
-            <div class="count-item"><span class="count-name">${n}</span><span class="count-num">${counts[n]}</span></div>
+        
+        document.querySelectorAll('.duty-select').forEach(s => { 
+            if (s.value) counts[s.value]++; 
+        });
+
+        const displayArea = document.getElementById('countDisplay');
+        let displayList = (filterVal === "ALL") ? staffList.sort() : [filterVal];
+
+        displayArea.innerHTML = displayList.map(n => `
+            <div class="count-item">
+                <span class="count-name" style="font-size:18px; font-weight:bold;">${n}</span>
+                <span class="count-num">${counts[n]}</span>
+            </div>
         `).join('');
+    }
+
+    function applyAllTemplates() {
+        const selects = document.querySelectorAll('.duty-select');
+        let successCount = 0;
+        selects.forEach(sel => {
+            const container = sel.closest('.cell-box');
+            const savedName = container.querySelector('.saved-name-big').getAttribute('data-saved-name');
+            if (savedName && savedName !== "--") {
+                const options = Array.from(sel.options).map(o => o.value);
+                if (options.includes(savedName)) {
+                    sel.value = savedName;
+                    successCount++;
+                }
+            }
+        });
+        handleSelectChange();
+        alert(`完成！已填入 ${successCount} 個崗位。`);
+    }
+
+    function applyName(e, id, name) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        const sel = document.getElementById(id);
+        if (Array.from(sel.options).some(o => o.value === name)) {
+            sel.value = name;
+            handleSelectChange();
+        } else {
+            alert(`人員衝突或不在名單內。`);
+        }
     }
 
     async function saveTemplate() {
@@ -259,8 +295,5 @@
         } catch (e) { alert("儲存失敗。"); }
     }
 </script>
-<div style="text-align: center; margin-top: 30px; padding: 20px;">
-    <a href="index.html" style="color: #1a73e8; text-decoration: none; font-weight: bold;">← 返回導覽首頁</a>
-</div>
 </body>
 </html>
