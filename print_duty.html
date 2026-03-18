@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>週循環排班定案 (含 CSV 匯入匯出)</title>
+    <style>
+        :root { --primary: #1a73e8; --secondary: #34a853; }
+        body { font-family: 'Segoe UI', "Microsoft JhengHei", sans-serif; background: white; padding: 10px; margin-bottom: 80px; }
+        .container { max-width: 99%; margin: auto; background: white; }
+        
+        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #ddd; gap: 10px; }
+        h2 { color: var(--primary); font-size: 24px; margin: 0; flex-grow: 1; }
+
+        .btn-group { display: flex; gap: 10px; }
+        .btn { padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
+        .btn-print { background: #1a73e8; color: white; }
+        .btn-export { background: #ffa000; color: white; }
+        .btn-import { background: #78909c; color: white; }
+        .btn:hover { opacity: 0.8; }
+
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 2px solid #333; margin-bottom: 30px; }
+        th, td { border: 1px solid #333; padding: 12px 4px; text-align: center; vertical-align: middle; overflow: hidden; }
+        th { background: #f1f3f4; font-size: 16px; }
+        
+        /* 時段配色 */
+        .bg-slot-1 { background-color: #e3f2fd !important; } 
+        .bg-slot-2 { background-color: #e8f5e9 !important; } 
+        .bg-slot-3 { background-color: #fff3e0 !important; } 
+        .bg-slot-4 { background-color: #f3e5f5 !important; } 
+        .bg-slot-5 { background-color: #f1f8e9 !important; } 
+
+        .col-stripe { background-color: #fcf6ed !important; } 
+
+        .slot-text { font-size: 13px; color: #555; display: block; }
+        .post-text { font-size: 18px; font-weight: bold; display: block; margin-top: 4px; }
+        .staff-name-big { font-size: 24px; font-weight: 900; color: #d93025; }
+
+        /* 空堂表樣式 */
+        .free-staff-tag { display: inline-block; background: #eee; padding: 2px 6px; margin: 2px; border-radius: 4px; font-size: 14px; color: #444; border: 1px solid #ccc; }
+        .section-title { background: #333; color: white; padding: 10px; margin-top: 40px; border-radius: 5px 5px 0 0; font-size: 18px; }
+
+        /* 統計區 */
+        .count-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 10px; }
+        .count-item { border: 1px solid #ccc; padding: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+        .count-num { font-weight: bold; color: #d93025; }
+
+        #loading { text-align: center; padding: 80px; font-size: 24px; color: #1a73e8; }
+
+        .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.9); padding: 15px; text-align: center; border-top: 1px solid #ddd; z-index: 2000; }
+        .btn-home { color: #1a73e8; text-decoration: none; font-weight: bold; border: 2px solid #1a73e8; padding: 8px 30px; border-radius: 20px; }
+
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; margin-bottom: 0; }
+            @page { size: landscape; margin: 0.5cm; }
+            .section-title { background: #eee !important; color: #000 !important; border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="loading">⏳ 正在載入排班定案及空堂名單...</div>
+
+    <div id="mainContent" style="display:none;">
+        <div class="header-box no-print">
+            <h2>🗓️ 週循環排班定案總表</h2>
+            <div class="btn-group">
+                <button class="btn btn-export" onclick="exportCSV()">📤 匯出 CSV</button>
+                <button class="btn btn-import" onclick="document.getElementById('csvFile').click()">📥 匯入 CSV</button>
+                <input type="file" id="csvFile" style="display:none" accept=".csv" onchange="importCSV(this)">
+                <button class="btn btn-print" onclick="window.print()">🖨️ 列印 / PDF</button>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 160px;">時段-崗位</th>
+                    <th>一 (Mon)</th>
+                    <th class="col-stripe">二 (Tue)</th>
+                    <th>三 (Wed)</th>
+                    <th class="col-stripe">四 (Thu)</th>
+                    <th>五 (Fri)</th>
+                </tr>
+            </thead>
+            <tbody id="setupBody"></tbody>
+        </table>
+
+        <div class="section-title">💡 各時段空堂名單 (待命/支援)</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 160px;">時段</th>
+                    <th>一 (Mon)</th>
+                    <th class="col-stripe">二 (Tue)</th>
+                    <th>三 (Wed)</th>
+                    <th class="col-stripe">四 (Thu)</th>
+                    <th>五 (Fri)</th>
+                </tr>
+            </thead>
+            <tbody id="freeBody"></tbody>
+        </table>
+
+        <div class="section-title">📊 總計當值次數</div>
+        <div id="countDisplay" class="count-grid"></div>
+        <div style="height: 100px;"></div>
+    </div>
+</div>
+
+<div class="footer-nav no-print">
+    <a href="index.html" class="btn-home">← 返回導覽首頁</a>
+</div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwOfS14IgZ-Ymmk-6lVByZhAyEp1xeZbupTGOoTSdyJf0V_ehNTQJQ6kh97qBy9sMTY/exec"; 
+    let structure = [], staffList = [], currentTemplate = [];
+
+    window.onload = init;
+
+    async function init() {
+        try {
+            const [res1, res2, res3] = await Promise.all([
+                fetch(`${SCRIPT_URL}?action=getStructure`).then(r => r.json()),
+                fetch(`${SCRIPT_URL}?action=getStaffList`).then(r => r.json()),
+                fetch(`${SCRIPT_URL}?action=getDutyTemplate`).then(r => r.json())
+            ]);
+            structure = res1;
+            staffList = res2;
+            currentTemplate = res3;
+            refreshUI();
+        } catch (e) { alert("❌ 數據讀取失敗"); }
+    }
+
+    function refreshUI() {
+        renderTable();
+        renderFreeTable();
+        updateCounts();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+    }
+
+    function renderTable() {
+        const body = document.getElementById('setupBody');
+        const slotNames = [...new Set(structure.map(item => item[1]))];
+        const uniquePosts = [];
+        const seen = new Set();
+
+        structure.forEach(item => {
+            const key = `${item[1]}|${item[2]}`; 
+            if (!seen.has(key)) { uniquePosts.push({ slot: item[1], post: item[2] }); seen.add(key); }
+        });
+
+        body.innerHTML = uniquePosts.map(p => {
+            const colorIdx = (slotNames.indexOf(p.slot) % 5) + 1;
+            const bgClass = `bg-slot-${colorIdx}`;
+            let rowHtml = `<tr><td class="${bgClass}" style="text-align:left;"><span class="slot-text">${p.slot}</span><span class="post-text">${p.post}</span></td>`;
+            const savedRow = Array.isArray(currentTemplate) ? currentTemplate.find(r => r[0] == p.slot && r[1] == p.post) : null;
+            for (let i = 0; i < 5; i++) {
+                const isStripe = (i === 1 || i === 3) ? "col-stripe" : ""; 
+                const savedName = savedRow ? (savedRow[i + 2] || "--") : "--";
+                rowHtml += `<td class="${isStripe}"><div class="staff-name-big">${savedName}</div></td>`;
+            }
+            return rowHtml + `</tr>`;
+        }).join('');
+    }
+
+    function renderFreeTable() {
+        const body = document.getElementById('freeBody');
+        const slotNames = [...new Set(structure.map(item => item[1]))];
+        body.innerHTML = slotNames.map((slot, sIdx) => {
+            const colorIdx = (sIdx % 5) + 1;
+            const bgClass = `bg-slot-${colorIdx}`;
+            let rowHtml = `<tr><td class="${bgClass}"><b>${slot}</b></td>`;
+            for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+                const busyStaff = currentTemplate.filter(r => r[0] === slot).map(r => r[dayIdx + 2]).filter(n => n && n !== "--");
+                const freeStaff = staffList.filter(name => !busyStaff.includes(name));
+                const staffTags = freeStaff.map(name => `<span class="free-staff-tag">${name}</span>`).join('');
+                rowHtml += `<td class="${(dayIdx === 1 || dayIdx === 3) ? 'col-stripe' : ''}">${staffTags}</td>`;
+            }
+            return rowHtml + "</tr>";
+        }).join('');
+    }
+
+    function updateCounts() {
+        const counts = {};
+        staffList.forEach(n => counts[n] = 0);
+        currentTemplate.forEach(row => {
+            for (let i = 2; i <= 6; i++) {
+                const name = row[i];
+                if (name && counts.hasOwnProperty(name)) counts[name]++;
+            }
+        });
+        document.getElementById('countDisplay').innerHTML = staffList.filter(n => counts[n] > 0)
+            .map(n => `<div class="count-item"><span>${n}</span><span class="count-num">${counts[n]}</span></div>`).join('');
+    }
+
+    // ✨ CSV 功能：匯出
+    function exportCSV() {
+        let csv = "\ufeffSlot,Post,Monday,Tuesday,Wednesday,Thursday,Friday\n";
+        currentTemplate.forEach(row => {
+            const cleaned = row.map(v => `"${String(v).replace(/"/g, '""')}"`);
+            csv += cleaned.join(",") + "\n";
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Duty_Template_Export.csv`;
+        link.click();
+    }
+
+    // ✨ CSV 功能：匯入
+    function importCSV(input) {
+        if (!input.files.length) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const lines = e.target.result.split("\n").filter(l => l.trim());
+                const newData = lines.slice(1).map(line => {
+                    // 解析包含引號的 CSV 格式
+                    const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                    return matches ? matches.map(m => m.replace(/^"|"$/g, '')) : line.split(",");
+                });
+                
+                if (confirm("⚠️ 匯入將覆蓋現有排班定案，並同步至雲端。確定嗎？")) {
+                    currentTemplate = newData;
+                    await syncToCloud(newData);
+                    refreshUI();
+                }
+            } catch (err) { alert("❌ CSV 解析出錯，請確保格式正確"); }
+        };
+        reader.readAsText(input.files[0]);
+        input.value = ""; // 清空 file input
+    }
+
+    async function syncToCloud(data) {
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: 'saveWeeklyTemplate', data: data })
+            });
+            alert("✅ 雲端同步成功！");
+        } catch (e) { alert("❌ 同步失敗"); }
+    }
+</script>
+</body>
+</html>

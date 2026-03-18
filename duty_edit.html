@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>管理崗位結構 (專業編輯版)</title>
+    <style>
+        :root { --primary: #1a73e8; --danger: #d93025; --success: #1e8e3e; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f1f3f4; margin-bottom: 100px; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        h2 { color: var(--primary); margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        
+        .toolbar { background: #fffde7; padding: 15px; border: 1px solid #ffe082; display: flex; gap: 12px; margin-bottom: 20px; border-radius: 8px; flex-wrap: wrap; align-items: center; }
+        
+        /* 篩選區樣式 */
+        .filter-box { background: #e8f0fe; padding: 10px 15px; border-radius: 8px; border: 1px solid #c1d5fa; display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .filter-box label { font-weight: bold; color: #1967d2; font-size: 14px; }
+
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 12px 8px; text-align: center; }
+        th { background: #f8f9fa; color: #5f6368; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        /* 表格輸入框 */
+        select, input { width: 92%; padding: 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 15px; transition: 0.2s; }
+        select:focus, input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); background: #fff; }
+
+        /* 按鈕樣式 */
+        .btn { padding: 10px 18px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: 0.2s; font-size: 14px; }
+        .btn-add { background: var(--primary); color: white; }
+        .btn-copy { background: #fff; color: var(--primary); border: 1px solid var(--primary); padding: 5px 10px; }
+        .btn-delete { background: var(--danger); color: white; padding: 5px 10px; }
+        .btn:hover { opacity: 0.8; transform: translateY(-1px); }
+        
+        .action-group { display: flex; gap: 5px; justify-content: center; }
+
+        .btn-save { background: var(--success); color: white; position: fixed; bottom: 25px; right: 25px; padding: 15px 45px; font-size: 18px; box-shadow: 0 6px 15px rgba(30,142,62,0.3); z-index: 1000; border-radius: 30px; }
+        
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #ddd; z-index: 999; display: flex; align-items: center; }
+        
+        .hidden-row { display: none; } /* 用於篩選隱藏 */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛠️ 崗位結構管理</h2>
+    
+    <div class="toolbar">
+        <button class="btn btn-add" onclick="addNewRow()">➕ 新增一列</button>
+        <button class="btn" style="background:#ffa000; color:white;" onclick="exportCSV()">📤 匯出 CSV</button>
+        <button class="btn" style="background:#78909c; color:white;" onclick="document.getElementById('csvIn').click()">📥 匯入 CSV</button>
+        <input type="file" id="csvIn" style="display:none;" accept=".csv" onchange="importCSV(this)">
+    </div>
+
+    <div class="filter-box">
+        <label>🔍 顯示篩選：</label>
+        <select id="filterDay" onchange="render()" style="width: 150px;">
+            <option value="all">顯示全部日期</option>
+            <option value="1">星期 1</option>
+            <option value="2">星期 2</option>
+            <option value="3">星期 3</option>
+            <option value="4">星期 4</option>
+            <option value="5">星期 5</option>
+        </select>
+        <input type="text" id="filterText" oninput="render()" placeholder="搜尋時段或崗位..." style="width: 200px; padding: 8px;">
+        <span style="font-size: 12px; color: #666;">* 篩選時亦可編輯</span>
+    </div>
+
+    <datalist id="slotSuggestions"></datalist>
+
+    <table id="dutyTable">
+        <thead>
+            <tr>
+                <th style="width: 130px;">星期 (Day)</th>
+                <th style="width: 220px;">時段 (Slot)</th>
+                <th>崗位名稱 (PostName)</th>
+                <th style="width: 140px;">操作</th>
+            </tr>
+        </thead>
+        <tbody id="dutyBody"></tbody>
+    </table>
+</div>
+
+<div class="footer">
+    <a href="index.html" style="font-weight: bold; color: var(--primary); text-decoration: none; border: 2px solid var(--primary); padding: 10px 25px; border-radius: 30px;">← 返回首頁</a>
+    <span style="margin-left: 20px; color: #888; font-size: 13px;">提示：點擊「📋」快速複製整行</span>
+    <button class="btn btn-save" onclick="saveData()">💾 儲存所有變更</button>
+</div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1Ke5dDJYFSwa-yLwgLc_zVdQYnXUfkmIpnlQdoX2kJV1Vp7eo9jt-k8jX4Gn5utg/exec"; 
+    let dutyData = [];
+
+    window.onload = async () => {
+        try {
+            const res = await fetch(`${SCRIPT_URL}?action=getStructure`);
+            dutyData = await res.json();
+            updateSlotSuggestions();
+            render();
+        } catch(e) { alert("讀取失敗"); }
+    };
+
+    function updateSlotSuggestions() {
+        const slots = [...new Set(dutyData.map(row => row[1]))].filter(s => s);
+        const dl = document.getElementById('slotSuggestions');
+        dl.innerHTML = slots.map(s => `<option value="${s}">`).join('');
+    }
+
+    function render() {
+        const body = document.getElementById('dutyBody');
+        const filterDay = document.getElementById('filterDay').value;
+        const filterText = document.getElementById('filterText').value.toLowerCase();
+        
+        body.innerHTML = dutyData.map((row, idx) => {
+            // 篩選邏輯
+            const matchDay = (filterDay === "all" || String(row[0]) === filterDay);
+            const matchText = (row[1].toLowerCase().includes(filterText) || row[2].toLowerCase().includes(filterText));
+            
+            if (!matchDay || !matchText) return ""; // 不符合條件就回傳空字串
+
+            let dayOptions = "";
+            for(let i=1; i<=5; i++) {
+                dayOptions += `<option value="${i}" ${row[0] == i ? 'selected' : ''}>星期 ${i}</option>`;
+            }
+
+            return `
+            <tr>
+                <td><select onchange="update(${idx}, 0, this.value)">${dayOptions}</select></td>
+                <td><input type="text" list="slotSuggestions" value="${row[1]}" onchange="update(${idx}, 1, this.value)"></td>
+                <td><input type="text" value="${row[2]}" onchange="update(${idx}, 2, this.value)"></td>
+                <td>
+                    <div class="action-group">
+                        <button class="btn btn-copy" title="複製此行" onclick="copyRow(${idx})">📋</button>
+                        <button class="btn btn-delete" title="刪除此行" onclick="deleteRow(${idx})">🗑️ 刪除</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function update(r, c, v) { 
+        dutyData[r][c] = v; 
+        if (c === 1) updateSlotSuggestions(); 
+    }
+
+    function addNewRow() {
+        const lastRow = dutyData.length > 0 ? dutyData[dutyData.length - 1] : [1, "", ""];
+        dutyData.push([lastRow[0], lastRow[1], ""]); 
+        render(); 
+    }
+
+    // ✨ 新增：複製整行功能
+    function copyRow(idx) {
+        const rowToCopy = [...dutyData[idx]]; // 淺拷貝
+        dutyData.splice(idx + 1, 0, rowToCopy); // 插入到當前行的下面
+        render();
+    }
+
+    function deleteRow(idx) {
+        if(confirm("確定刪除此崗位？")) {
+            dutyData.splice(idx,1); 
+            render(); 
+        }
+    }
+
+    function exportCSV() {
+        let csv = "\ufeffDay,SlotName,PostName\n";
+        dutyData.forEach(row => {
+            const cleaned = row.map(v => `"${String(v).replace(/"/g, '""')}"`);
+            csv += cleaned.join(",") + "\n";
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Duty_Structure.csv";
+        link.click();
+    }
+
+    function importCSV(input) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const lines = e.target.result.split("\n");
+            dutyData = lines.slice(1).filter(l => l.trim()).map(line => {
+                const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                return matches ? matches.map(m => m.replace(/^"|"$/g, '')) : line.split(",");
+            });
+            updateSlotSuggestions();
+            render();
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    async function saveData() {
+        const btn = document.querySelector('.btn-save');
+        btn.innerText = "⌛ 正在同步雲端..."; btn.disabled = true;
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: 'saveStructure', data: dutyData })
+            });
+            alert("✅ 結構已儲存成功！");
+        } catch(e) { alert("❌ 儲存失敗"); }
+        btn.innerText = "💾 儲存所有變更"; btn.disabled = false;
+    }
+</script>
+</body>
+</html>

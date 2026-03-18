@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理教師名單</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        
+        .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; background: #e8f0fe; padding: 15px; border-radius: 8px; }
+        .btn { border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { border: 1px solid var(--primary); color: var(--primary); background: white; }
+        .btn-save { background: #34a853; color: white; padding: 12px 30px; font-size: 16px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f1f3f4; }
+        input[type="text"] { width: 100%; border: 1px solid transparent; padding: 5px; box-sizing: border-box; font-size: 14px; }
+        input[type="text"]:focus { border-color: var(--primary); background: #fffde7; outline: none; }
+        
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .delete-btn { color: #d93025; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>教師名單管理</h2>
+    
+    <div class="toolbar">
+        <button class="btn btn-outline" onclick="addNewRow()">➕ 新增教師</button>
+        <button class="btn btn-outline" onclick="exportCSV()">📤 匯出 CSV</button>
+        <button class="btn btn-outline" onclick="document.getElementById('csvInput').click()">📥 匯入 CSV</button>
+        <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="importCSV(this)">
+    </div>
+
+    <div id="loading">⏳ 載入中...</div>
+    <table id="staffTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>教師姓名 (StaffName)</th>
+                <th>部門 (Department)</th>
+                <th>狀態 (Status)</th>
+                <th style="width: 50px;">刪除</th>
+            </tr>
+        </thead>
+        <tbody id="staffBody"></tbody>
+    </table>
+    <div style="height: 80px;"></div>
+</div>
+
+<div class="footer">
+    <a href="index.html" style="text-decoration:none; color: var(--primary); font-weight: bold;">← 返回導覽首頁</a>
+    <button class="btn btn-save" onclick="saveData()">💾 儲存名單至雲端</button>
+</div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1Ke5dDJYFSwa-yLwgLc_zVdQYnXUfkmIpnlQdoX2kJV1Vp7eo9jt-k8jX4Gn5utg/exec"; // 需填入
+    let staffData = [];
+
+    window.onload = loadData;
+
+    async function loadData() {
+        const res = await fetch(`${SCRIPT_URL}?action=getStaffMaster`); // 需在GS新增此action
+        staffData = await res.json();
+        renderTable();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('staffTable').style.display = 'table';
+    }
+
+    function renderTable() {
+        const body = document.getElementById('staffBody');
+        body.innerHTML = staffData.map((row, idx) => `
+            <tr>
+                <td><input type="text" value="${row[0] || ''}" onchange="updateData(${idx}, 0, this.value)"></td>
+                <td><input type="text" value="${row[1] || 'SCHOOL'}" onchange="updateData(${idx}, 1, this.value)"></td>
+                <td><input type="text" value="${row[2] || 'Active'}" onchange="updateData(${idx}, 2, this.value)"></td>
+                <td align="center"><span class="delete-btn" onclick="deleteRow(${idx})">🗑️</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function updateData(r, c, val) { staffData[r][c] = val; }
+
+    function addNewRow() {
+        staffData.push(["", "SCHOOL", "Active"]);
+        renderTable();
+    }
+
+    function deleteRow(idx) {
+        if(confirm("確定刪除？")) {
+            staffData.splice(idx, 1);
+            renderTable();
+        }
+    }
+
+    function exportCSV() {
+        let csv = "\ufeffStaffName,Department,Status\n";
+        staffData.forEach(row => csv += row.join(",") + "\n");
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Staff_Master.csv";
+        link.click();
+    }
+
+    function importCSV(input) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const lines = e.target.result.split("\n");
+            staffData = lines.slice(1).filter(l => l.trim()).map(l => l.split(",").map(v => v.trim()));
+            renderTable();
+            alert("匯入成功，請記得儲存。");
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    async function saveData() {
+        const btn = document.querySelector('.btn-save');
+        btn.innerText = "⌛ 儲存中..."; btn.disabled = true;
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: 'saveStaffMaster', data: staffData })
+            });
+            alert("✅ 教師名單已儲存！");
+        } catch(e) { alert("❌ 儲存失敗"); }
+        btn.innerText = "💾 儲存名單至雲端"; btn.disabled = false;
+    }
+</script>
+</body>
+</html>
