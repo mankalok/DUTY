@@ -3,31 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>快速點名系統 (連備註版)</title>
+    <title>快速點名系統 (日期防誤版)</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f7f9; padding: 15px; margin: 0; }
+        :root { --dark: #2c3e50; --success-bg: #e8f5e9; --success-border: #81c784; --new-bg: #fff9c4; --warn-red: #d93025; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f7f9; padding: 15px; margin: 0; padding-top: 60px; }
+        
+        .floating-home-btn {
+            position: fixed; top: 15px; left: 15px; text-decoration: none; color: white;
+            background: var(--dark); padding: 10px 20px; border-radius: 50px; font-weight: bold;
+            display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10000; border: 2px solid white;
+        }
+
         .card { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; background: #e3f2fd; padding: 15px; border-radius: 8px; }
-        .warning-text { color: #d93025; background: #fce8e6; padding: 10px; border-radius: 6px; font-weight: bold; margin-bottom: 15px; display: none; border: 1px solid #f5c2c7; }
         
+        /* 補填警告樣式 */
+        .history-warning { 
+            display: none; background: #fce8e6; color: var(--warn-red); 
+            padding: 10px; border-radius: 6px; margin-bottom: 15px; 
+            border: 1px solid #f5c2c7; font-weight: bold; font-size: 0.9rem;
+        }
+
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #eee; padding: 12px 8px; text-align: left; }
         th { background: #fafafa; color: #666; font-size: 0.9rem; }
         
-        select, input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 14px; }
-        .remark-input { border: 1px dashed #ccc; background: #f9f9f9; }
-        .remark-input:focus { background: white; border-color: #1a73e8; outline: none; }
+        tr.has-record { background-color: var(--success-bg); border-left: 5px solid var(--success-border); }
+        tr.selected-row { background-color: var(--new-bg); border-left: 5px solid #ffd54f; }
+        
+        .status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
+        .badge-done { background: #4caf50; color: white; }
+        .badge-none { background: #9e9e9e; color: white; }
 
+        .row-check { transform: scale(1.5); cursor: pointer; }
+        select, input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 14px; }
+        
         .btn-save { background: #34a853; color: white; border: none; padding: 16px; width: 100%; border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 20px; font-weight: bold; }
         .btn-save:disabled { background: #ccc; cursor: not-allowed; }
-        .loading-cover { text-align: center; padding: 30px; color: #1a73e8; font-weight: bold; font-size: 1.1rem; }
-        
-        @media (max-width: 600px) {
-            th:nth-child(3), td:nth-child(3) { width: 40%; } /* 備註欄喺手機留多啲位 */
-        }
+        .loading-cover { text-align: center; padding: 30px; color: #1a73e8; font-weight: bold; }
     </style>
 </head>
 <body>
+
+<a href="index.html" class="floating-home-btn">🏠 返回系統首頁</a>
 
 <div class="card">
     <h3 style="margin-top:0;">📝 每日考勤系統</h3>
@@ -37,56 +55,59 @@
         <span id="dayLabel" style="font-weight:bold; min-width:60px; text-align:center; background:white; padding:5px; border-radius:4px;"></span>
     </div>
 
-    <div id="historyWarn" class="warning-text">⚠️ 您正在補回過去日子的紀錄，請小心核對日期。</div>
+    <div id="historyWarn" class="history-warning">⚠️ 注意：您正在查看或補填「過去日子」的紀錄。</div>
 
-    <div style="margin-bottom:15px; display:flex; align-items:center; gap:10px;">
-        <label style="white-space:nowrap;"><b>🕒 選擇時段：</b></label>
+    <div style="margin-bottom:15px; display:flex; align-items:center; gap:10px; background: #fff3e0; padding: 10px; border-radius: 8px;">
+        <label><b>🕒 選擇時段：</b></label>
         <select id="slotFilter" onchange="renderTable()"></select>
+        <div style="font-size: 0.8rem;">🟩 已填紀錄 | 🟨 準備更新/提交</div>
     </div>
 
-    <div id="loading" class="loading-cover">⏳ 正在載入名單...</div>
+    <div id="loading" class="loading-cover">⏳ 正在載入名單與舊紀錄...</div>
 
     <div id="mainContent" style="display:none;">
         <div style="overflow-x: auto;">
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 25%;">崗位</th>
-                        <th style="width: 25%;">當值人員</th>
-                        <th style="width: 15%;">狀態</th>
-                        <th style="width: 35%;">備註</th>
+                        <th style="width: 50px;">負責</th>
+                        <th style="width: 20%;">崗位</th>
+                        <th style="width: 20%;">當值人員</th>
+                        <th style="width: 20%;">狀態</th>
+                        <th>備註</th>
                     </tr>
                 </thead>
                 <tbody id="attTable"></tbody>
             </table>
         </div>
-        <button id="saveBtn" class="btn-save" onclick="doSubmit()">✅ 儲存並提交此時段紀錄</button>
+        <button id="saveBtn" class="btn-save" onclick="doSubmit()">✅ 儲存「黃色」已勾選紀錄</button>
     </div>
 </div>
 
 <script>
-    // ⚠️ 記得填入你部署後得到嘅網址
     const API = "https://script.google.com/macros/s/AKfycbykfLCzjfsEJ5Ps14lJP5eQfq0n5o4bBEl-N2U5qRFQMYblruj4JSjxlDzfu2LSTCMA/exec"; 
     let masterData = [];
     let staffList = [];
+    let existingRecords = [];
 
     window.onload = () => {
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         const dInput = document.getElementById('dateInput');
         
-        dInput.max = todayStr; // 禁止揀未來日期
         dInput.value = todayStr;
+        dInput.max = todayStr; // 禁止揀未來日期
+        
         loadData();
     };
 
     async function loadData() {
         const dateVal = document.getElementById('dateInput').value;
-        const today = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
         
-        // 顯示/隱藏補點警告
-        document.getElementById('historyWarn').style.display = (dateVal < today) ? 'block' : 'none';
-        
+        // 顯示補填警告
+        document.getElementById('historyWarn').style.display = (dateVal < todayStr) ? 'block' : 'none';
+
         const dayNames = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"];
         document.getElementById('dayLabel').innerText = dayNames[new Date(dateVal).getDay()];
 
@@ -95,12 +116,17 @@
 
         try {
             const ts = new Date().getTime();
-            const [temp, staffs] = await Promise.all([
+            const [temp, staffs, records] = await Promise.all([
                 fetch(`${API}?action=getDutyTemplate&_=${ts}`).then(r => r.json()),
-                fetch(`${API}?action=getStaffList&_=${ts}`).then(r => r.json())
+                fetch(`${API}?action=getStaffList&_=${ts}`).then(r => r.json()),
+                fetch(`${API}?action=getExistingLog&date=${dateVal}&_=${ts}`).then(r => r.json())
             ]);
             
             staffList = staffs;
+            existingRecords = (records || []).map(row => ({
+                slot: row[2], post: row[3], staff: row[4], status: row[5], remarks: row[6]
+            }));
+            
             const dayIdx = new Date(dateVal).getDay();
             const col = (dayIdx === 0) ? 8 : dayIdx + 1;
 
@@ -120,55 +146,97 @@
             document.getElementById('loading').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
         } catch(e) {
-            document.getElementById('loading').innerHTML = "❌ 載入失敗，請檢查 API 網址或權限。";
+            document.getElementById('loading').innerHTML = "❌ 載入失敗。";
         }
     }
 
     function renderTable() {
         const targetSlot = document.getElementById('slotFilter').value;
         const body = document.getElementById('attTable');
-        
         const filtered = masterData.filter(d => d.slot === targetSlot);
-        const staffOptions = staffList.map(s => `<option value="${s}">${s}</option>`).join('');
 
-        body.innerHTML = filtered.map(d => `
-            <tr data-slot="${d.slot}" data-post="${d.post}">
-                <td><b>${d.post}</b></td>
-                <td>
-                    <select class="s-staff">
-                        ${staffList.map(s => `<option value="${s}" ${s===d.staff?'selected':''}>${s}</option>`).join('')}
-                    </select>
-                </td>
-                <td>
-                    <select class="s-status">
-                        <option value="Present">出席</option>
-                        <option value="Absent">缺席</option>
-                    </select>
-                </td>
-                <td>
-                    <input type="text" class="s-remark" placeholder="輸入備註...">
-                </td>
-            </tr>
-        `).join('');
+        body.innerHTML = filtered.map((d, index) => {
+            const old = existingRecords.find(r => r.slot === d.slot && r.post === d.post);
+            const hasRecord = !!old;
+            const rowClass = hasRecord ? 'has-record' : '';
+            const statusLabel = hasRecord ? '<span class="status-badge badge-done">已有紀錄</span>' : '<span class="status-badge badge-none">未填寫</span>';
+
+            return `
+                <tr id="row-${index}" class="${rowClass}" data-slot="${d.slot}" data-post="${d.post}">
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="row-check" onchange="toggleRowHighlight(${index})">
+                    </td>
+                    <td>${statusLabel}<br><b>${d.post}</b></td>
+                    <td>
+                        <select class="s-staff" onchange="autoCheck(${index})">
+                            ${staffList.map(s => `<option value="${s}" ${s === (old ? old.staff : d.staff)?'selected':''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="s-status" onchange="autoCheck(${index})">
+                            <option value="Present" ${old?.status === 'Present' ? 'selected' : ''}>出席</option>
+                            <option value="Absent" ${old?.status === 'Absent' ? 'selected' : ''}>缺席</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="s-remark" value="${old ? old.remarks : ''}" placeholder="輸入備註..." oninput="autoCheck(${index})">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function autoCheck(index) {
+        document.querySelector(`#row-${index} .row-check`).checked = true;
+        toggleRowHighlight(index);
+    }
+
+    function toggleRowHighlight(index) {
+        const row = document.getElementById(`row-${index}`);
+        const cb = row.querySelector('.row-check');
+        if(cb.checked) {
+            row.classList.add('selected-row');
+            row.classList.remove('has-record');
+        } else {
+            row.classList.remove('selected-row');
+            const targetSlot = document.getElementById('slotFilter').value;
+            if(existingRecords.find(r => r.slot === targetSlot && r.post === row.dataset.post)) {
+                row.classList.add('has-record');
+            }
+        }
     }
 
     async function doSubmit() {
         const dateVal = document.getElementById('dateInput').value;
+        const todayStr = new Date().toISOString().split('T')[0];
         const btn = document.getElementById('saveBtn');
-        
-        if(!confirm(`確定提交 ${dateVal} 的點名紀錄嗎？`)) return;
+        const rows = document.querySelectorAll('#attTable tr');
+        const checkedRecords = [];
+
+        rows.forEach(tr => {
+            if (tr.querySelector('.row-check').checked) {
+                checkedRecords.push({
+                    slot: tr.dataset.slot,
+                    post: tr.dataset.post,
+                    staff: tr.querySelector('.s-staff').value,
+                    status: tr.querySelector('.s-status').value,
+                    remarks: tr.querySelector('.s-remark').value
+                });
+            }
+        });
+
+        if (checkedRecords.length === 0) return alert("請先勾選你要提交嘅資料。");
+
+        // 歷史日期提交確認
+        let confirmMsg = `確定提交 ${checkedRecords.length} 條紀錄嗎？`;
+        if (dateVal < todayStr) {
+            confirmMsg = `⚠️ 注意：您正在補回/修改過去的紀錄 (${dateVal})！\n\n確定要繼續嗎？`;
+        }
+
+        if(!confirm(confirmMsg)) return;
 
         btn.disabled = true;
-        btn.innerText = "⏳ 提交同步中...";
-
-        const rows = document.querySelectorAll('#attTable tr');
-        const records = Array.from(rows).map(tr => ({
-            slot: tr.dataset.slot,
-            post: tr.dataset.post,
-            staff: tr.querySelector('.s-staff').value,
-            status: tr.querySelector('.s-status').value,
-            remarks: tr.querySelector('.s-remark').value
-        }));
+        btn.innerText = "⏳ 正在更新...";
 
         try {
             const res = await fetch(API, {
@@ -177,20 +245,17 @@
                     action: 'submitAttendance',
                     date: dateVal,
                     dayName: document.getElementById('dayLabel').innerText,
-                    records: records
+                    records: checkedRecords
                 })
             });
-            const result = await res.text();
-            alert(result);
+            alert(await res.text());
+            loadData();
         } catch(e) {
-            alert("提交出錯，請稍後再試。");
+            alert("提交失敗");
         }
         btn.disabled = false;
-        btn.innerText = "✅ 儲存並提交此時段紀錄";
+        btn.innerText = "✅ 儲存「黃色」已勾選紀錄";
     }
 </script>
-<div style="text-align: center; margin-top: 30px; padding: 20px;">
-    <a href="index.html" style="color: #1a73e8; text-decoration: none; font-weight: bold;">← 返回導覽首頁</a>
-</div>
 </body>
 </html>
